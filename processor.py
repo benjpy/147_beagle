@@ -51,6 +51,13 @@ class InvestmentProcessor:
         response = self.model.generate_content(prompt)
         
         # 3. Parse JSON from response
+        usage = getattr(response, 'usage_metadata', None)
+        token_usage = {
+            "prompt_tokens": usage.prompt_token_count if usage else 0,
+            "candidates_tokens": usage.candidates_token_count if usage else 0,
+            "total_tokens": usage.total_token_count if usage else 0
+        }
+
         try:
             # Simple cleanup for Gemini JSON formatting
             json_str = response.text.strip()
@@ -61,7 +68,7 @@ class InvestmentProcessor:
             print(f"Error parsing Gemini response: {e}")
             extracted_data = {}
 
-        return extracted_data
+        return extracted_data, token_usage
 
     def map_to_schema(self, extracted_data):
         """Maps Gemini JSON to 3 rows in the 47-column CSV schema: (Value, Confidence, Source)."""

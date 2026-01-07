@@ -1,20 +1,79 @@
-import streamlit as st
-import pandas as pd
-import os
-import json
-from dotenv import load_dotenv
-import extractor
-import processor as processor_module
+import time
 
 # Load environment variables
 load_dotenv()
 
-st.set_page_config(page_title="SOSV Document Extractor", layout="wide")
+st.set_page_config(page_title="SOSV Document Extractor", layout="wide", page_icon="📊")
+
+# SOSV Branding & CSS
+st.markdown("""
+    <style>
+    :root {
+        --sosv-navy: #071D49;
+        --sosv-orange: #F68B1F;
+        --sosv-light: #F8F9FA;
+    }
+    
+    /* Force Light Theme appearance for specific elements if needed */
+    .stApp {
+        background-color: white;
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: var(--sosv-navy) !important;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Buttons */
+    div.stButton > button {
+        background-color: var(--sosv-navy);
+        color: white;
+        border-radius: 8px;
+        border: none;
+        padding: 0.5rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    div.stButton > button:hover {
+        background-color: var(--sosv-orange);
+        color: white;
+        border: none;
+    }
+    
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: var(--sosv-light);
+        border-right: 1px solid #e0e0e0;
+    }
+    
+    /* Metrics / Cards */
+    .metric-card {
+        background-color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--sosv-orange);
+    }
+    
+    .metric-label {
+        font-size: 0.8rem;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.05rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 st.title("📊 SOSV Investment Document Extractor")
-st.markdown("""
-Extract investment data from PDFs and Spreadsheets into the canonical SOSV schema.
-""")
+st.markdown("<p style='color: #666; font-size: 1.1rem;'>Precision extraction into the canonical SOSV schema.</p>", unsafe_allow_html=True)
 
 # Sidebar for configuration
 with st.sidebar:
@@ -43,6 +102,8 @@ if uploaded_files:
     if st.button("🚀 Process Documents"):
         processor = processor_module.InvestmentProcessor(api_key)
         
+        start_time = time.time()
+        
         with st.spinner("Reading documents..."):
             documents = []
             for uploaded_file in uploaded_files:
@@ -62,7 +123,7 @@ if uploaded_files:
                 })
 
         with st.spinner("Analyzing with Gemini..."):
-            raw_data = processor.process_documents(documents)
+            raw_data, usage = processor.process_documents(documents)
             mapped_rows = processor.map_to_schema(raw_data)
             final_rows = processor.apply_inference(mapped_rows)
             
@@ -70,12 +131,36 @@ if uploaded_files:
             cols = processor.get_canonical_columns()
             df = pd.DataFrame(final_rows, columns=cols)
             
+            # Metrics calculation
+            end_time = time.time()
+            duration = end_time - start_time
+            
+            # Cost calculation ($0.3/1M in, $2.5/1M out)
+            cost_in = (usage['prompt_tokens'] / 1_000_000) * 0.30
+            cost_out = (usage['candidates_tokens'] / 1_000_000) * 2.50
+            total_cost = cost_in + cost_out
+
             # Store in session state for persistence across edits
             st.session_state['extracted_df'] = df
             # Audit log uses the first row (actual values)
             st.session_state['audit_log'] = processor.generate_audit_log(raw_data, final_rows[0], [])
+            st.session_state['last_metrics'] = {
+                "duration": duration,
+                "cost": total_cost,
+                "tokens": usage['total_tokens']
+            }
 
 if 'extracted_df' in st.session_state:
+    m = st.session_state.get('last_metrics', {})
+    if m:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Processing Time</div><div class="metric-value">{m["duration"]:.2f}s</div></div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Estimated Cost</div><div class="metric-value">${m["cost"]:.4f}</div></div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Tokens Used</div><div class="metric-value">{m["tokens"]:,}</div></div>', unsafe_allow_html=True)
+
     st.subheader("Review & Edit Extracted Data")
     
     # Track the original state to detect changes
