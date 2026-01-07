@@ -1,0 +1,251 @@
+PRODUCT REQUIREMENTS DOCUMENT
+Project: SOSV Investment Document Extractor
+Version: 1.0
+Owner: SOSV
+Last updated: 2026-01-07
+
+============================================================
+1. PURPOSE
+============================================================
+
+SOSV receives multiple documents for each portfolio company funding round
+(e.g. cap tables, subscription agreements, notes, SAFEs).
+The goal of this product is to automatically extract, infer, and compute
+investment data relevant to SOSV and populate a single standardized output
+row matching the schema of:
+
+    Alex New Company Form - Closed.csv
+
+The system must be auditable, conservative, and suitable for internal
+investment operations and finance workflows.
+
+============================================================
+2. SCOPE
+============================================================
+
+IN SCOPE:
+- One company per run
+- One funding round per run
+- Extraction from:
+  - PDFs (contracts, agreements)
+  - Excel / CSV (cap tables)
+  - Other structured or semi-structured documents
+- Focus exclusively on SOSV’s investment
+- Inference and derivation of values when defensible
+- Streamlit UI for upload, review, manual edits, and export
+- Audit logging for every run
+
+OUT OF SCOPE (v1):
+- Multi-round batch processing
+- Cross-company aggregation
+- Automated ingestion from email or data rooms
+- Legal interpretation beyond explicit or standard VC mechanics
+
+============================================================
+3. USERS
+============================================================
+
+Primary users:
+- SOSV investment operations
+- SOSV finance
+- SOSV deal team support
+
+Secondary users:
+- Partners (read-only review)
+
+Users are financially sophisticated but not engineers.
+
+============================================================
+4. INPUTS
+============================================================
+
+Each run consists of:
+- One or more documents related to a single company and round
+- Typical documents include:
+  - Subscription agreements (PDF)
+  - Cap tables (Excel / CSV)
+  - Side letters, notes, SAFEs
+- Documents are always company-specific
+
+============================================================
+5. OUTPUT
+============================================================
+
+The system produces:
+
+1) A populated version of:
+   Alex New Company Form - Closed.csv
+
+2) Exactly one row per run
+
+3) For each column:
+   - Value
+   - Source
+   - Confidence
+
+4) A structured audit log for the run
+
+============================================================
+6. DATA EXTRACTION RULES
+============================================================
+
+6.1 Canonical schema
+-------------------
+The output schema is fixed and must match the columns of:
+Alex New Company Form - Closed.csv exactly.
+
+Columns are consistent across all companies and rounds.
+
+6.2 Focus
+---------
+SOSV is the investor of interest.
+Only SOSV’s investment, ownership, economics, and rights are required.
+Other investors are context only.
+
+6.3 Source precedence (strict)
+------------------------------
+When multiple values conflict:
+
+1. Signed contracts (PDFs)
+2. Cap tables (Excel / CSV)
+3. Other documents
+
+Higher-precedence sources always win, but conflicts must be logged.
+
+6.4 Explicit extraction
+-----------------------
+If a value is explicitly stated:
+- Copy it exactly
+- Preserve currency and units
+- Do not normalize unless required by the schema
+
+6.5 Inference and derivation
+----------------------------
+Inference is allowed when:
+- Inputs are explicit
+- The derivation is unambiguous
+- The result would be accepted by a human analyst
+
+Examples:
+- Ownership % = SOSV shares / total shares
+- Post-money valuation = pre-money + investment amount
+
+When deriving:
+- Source must state: "Derived from X, Y"
+- All contributing documents must be listed
+
+Hallucination is strictly forbidden.
+
+6.6 Missing data
+----------------
+If a value cannot be found or reasonably inferred:
+- Leave the value cell empty
+- Write "NOT FOUND" in the confidence column
+
+============================================================
+7. SOURCE ATTRIBUTION FORMAT
+============================================================
+
+7.1 Spreadsheets
+----------------
+Format:
+    filename | sheet name | cell
+
+Example:
+    Scindo_Cap_table.xlsx | Post-Money | D14
+
+7.2 PDFs
+--------
+Format:
+    filename | page number | section number (if explicitly labeled) | "exact quoted snippet"
+
+Rules:
+- Section numbers must exist in the document
+- Quoted snippet must be verbatim
+- Do not paraphrase
+- Do not invent section names
+
+7.3 Derived values
+------------------
+Format:
+    Derived from filename1, filename2, ...
+
+============================================================
+8. CONFIDENCE SCORING
+============================================================
+
+Each populated cell must have a confidence value.
+
+Suggested rubric:
+- 95–100%: Exact value found in signed contract
+- 80–94%: Exact value found in cap table or structured table
+- 60–79%: Clean derivation from explicit inputs
+- 40–59%: Inference with mild ambiguity
+
+Special values:
+- NOT FOUND: value missing
+- Manual edit: user-modified value
+
+============================================================
+9. MANUAL EDITING
+============================================================
+
+Users may manually edit extracted values in the Streamlit UI.
+
+When a value is manually edited:
+- The value is replaced
+- The confidence column is overwritten with "Manual edit"
+- The original extracted value, source, and confidence
+  are preserved in the audit log
+
+============================================================
+10. AUDIT LOG
+============================================================
+
+Each run must generate an audit log containing:
+- Timestamp
+- Files processed
+- Fields extracted directly
+- Fields inferred
+- Fields left empty
+- Conflicts detected (with sources)
+- Manual edits applied
+
+Audit logs must be machine-readable (JSON).
+
+============================================================
+11. SYSTEM ARCHITECTURE (HIGH LEVEL)
+============================================================
+
+- Streamlit frontend
+- Python backend
+- Gemini API for extraction and reasoning
+- External prompt file (not hard-coded)
+- Deterministic post-processing layer
+- Environment variables loaded from .env
+
+============================================================
+12. NON-FUNCTIONAL REQUIREMENTS
+============================================================
+
+- Conservative behavior preferred over completeness
+- No hallucinated values
+- Fully auditable outputs
+- Clear separation between:
+  - Extraction
+  - Inference
+  - Human override
+
+============================================================
+13. FUTURE EXTENSIONS (NOT v1)
+============================================================
+
+- YAML-based field-level extraction rules
+- Multi-round batch uploads
+- Google Sheets export
+- Reviewer approval workflow
+- Automated document classification
+
+============================================================
+END OF DOCUMENT
+============================================================
