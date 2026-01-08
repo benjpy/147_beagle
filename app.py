@@ -170,18 +170,19 @@ if 'extracted_df' in st.session_state:
 
     st.subheader("Review & Edit Extracted Data")
     
-    # Transpose for display: Fields as rows, (Value, Confidence, Source) as columns
+    # Transpose for display: Fields as rows, (Value, Confidence, Reference, Document) as columns
     display_df = st.session_state['extracted_df'].T
     display_df.index.name = "Field"
     display_df = display_df.reset_index()
-    display_df.columns = ["Field", "Value", "Confidence", "Source"]
+    display_df.columns = ["Field", "Value", "Confidence", "Reference", "Document"]
     
-    # Configure column widths for better readability
+    # Configure column widths for better readability and space utilization
     column_config = {
-        "Field": st.column_config.TextColumn("Field", width="large"),
-        "Value": st.column_config.TextColumn("Value", width="medium"),
+        "Field": st.column_config.TextColumn("Field", width="medium"),
+        "Value": st.column_config.TextColumn("Value", width="small"),
         "Confidence": st.column_config.TextColumn("Confidence", width="small"),
-        "Source": st.column_config.TextColumn("Source", width="large")
+        "Reference": st.column_config.TextColumn("Reference", width="medium"),
+        "Document": st.column_config.TextColumn("Document", width="medium")
     }
     
     # Track the original state to detect changes
@@ -196,9 +197,8 @@ if 'extracted_df' in st.session_state:
     
     # Check for changes and update session state (mapping back to horizontal)
     if not edited_display_df.equals(display_df):
-        # Transpose back to horizontal format, removing the 'Field' column by setting it as index first
+        # Transpose back to horizontal format
         new_extracted_df = edited_display_df.set_index("Field").T
-        # Match the original column order/names exactly
         new_extracted_df.columns = st.session_state['extracted_df'].columns
         
         # Simple change detection for audit log

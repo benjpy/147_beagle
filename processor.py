@@ -71,12 +71,13 @@ class InvestmentProcessor:
         return extracted_data, token_usage
 
     def map_to_schema(self, extracted_data):
-        """Maps Gemini JSON to 3 rows in the 47-column CSV schema: (Value, Confidence, Source)."""
+        """Maps Gemini JSON to 4 rows in the 47-column CSV schema: (Value, Confidence, Reference, Document)."""
         columns = self.get_canonical_columns()
         
         row_val = {col: "" for col in columns}
         row_conf = {col: "" for col in columns}
-        row_src = {col: "" for col in columns}
+        row_ref = {col: "" for col in columns}
+        row_doc = {col: "" for col in columns}
         
         # Mapping for the complex CSV headers
         mapping = {
@@ -113,7 +114,7 @@ class InvestmentProcessor:
                         val = field_data.get("value")
                         row_conf[schema_col] = self.calculate_confidence(field_data)
                         
-                        # New multi-line source formatting
+                        # Split source into Reference and Document
                         sources = field_data.get("sources", [])
                         if not sources and ("source_file" in field_data or "file" in field_data):
                             # Fallback for old/single source format
@@ -123,21 +124,30 @@ class InvestmentProcessor:
                                 "type": field_data.get("source_type", field_data.get("type", ""))
                             }]
                         
-                        src_lines = []
+                        src_refs = []
+                        src_docs = []
                         if field_data.get("is_conflict"):
-                            src_lines.append("Conflict: Yes")
+                            src_refs.append("Conflict: Yes")
                         
                         for s in sources:
                             fname = s.get("file", "")
                             detail = s.get("detail", "")
-                            if fname: src_lines.append(fname)
+                            if fname: src_docs.append(fname)
                             if detail:
                                 # Split detail into parts (e.g., "Sheet: X, Cell: Y" -> ["Sheet: X", "Cell: Y"])
-                                # We remove the "Sheet: " or "Cell: " prefixes to match user's clean format
+                                # Remove "Sheet: " or "Cell: " prefixes
                                 parts = [p.strip().replace("Sheet: ", "").replace("Cell: ", "") for p in detail.split(",")]
-                                src_lines.extend(parts)
+                                src_refs.extend(parts)
                         
-                        row_src[schema_col] = "\n".join(src_lines)
+                        row_ref[schema_col] = "\n".join(src_refs)
+                        # Deduplicate filenames but preserve order
+                        seen = set()
+                        unique_docs = []
+                        for d in src_docs:
+                            if d not in seen:
+                                unique_docs.append(d)
+                                seen.add(d)
+                        row_doc[schema_col] = "\n".join(unique_docs)
                     else:
                         val = field_data
                     
@@ -154,7 +164,8 @@ class InvestmentProcessor:
         # Label the rows in the first column (Company Name)
         company_name = row_val.get("Company Name", "Unknown")
         row_conf["Company Name"] = f"{company_name} (Confidence)"
-        row_src["Company Name"] = f"{company_name} (Source)"
+        row_ref["Company Name"] = f"{company_name} (Reference)"
+        row_doc["Company Name"] = f"{company_name} (Document)"
 
         # Apply strict categorical normalization
         for row in [row_val]: # Only normalize the actual values
@@ -214,10 +225,11 @@ class InvestmentProcessor:
 
     def apply_inference(self, rows):
         """Infers values like Post-money = Pre-money + Total Fundraising and USD mirroring."""
-        if not rows: return rows
+        if not rows or len(rows) < 4: return rows
         row_val = rows[0]
         row_conf = rows[1]
-        row_src = rows[2]
+        row_ref = rows[2]
+        row_doc = rows[3]
 
         # Helper to clean currency strings and convert to float
         def clean_val(val):
@@ -237,12 +249,13 @@ class InvestmentProcessor:
         if post is None and pre is not None and total is not None:
             row_val["b. Post-Money Valuation \n(in Deal Currency)"] = pre + total
             row_conf["b. Post-Money Valuation \n(in Deal Currency)"] = "75% (Inferred)"
-            row_src["b. Post-Money Valuation \n(in Deal Currency)"] = "Derived: Pre-Money + Total"
+            row_ref["b. Post-Money Valuation \n(in Deal Currency)"] = "Derived: Pre-Money + Total"
+            row_doc["b. Post-Money Valuation \n(in Deal Currency)"] = "N/A (Inferred)"
         
         # Inference: USD Normalization
         currency = str(row_val.get("Deal Currency (Symbol)", "")).upper()
         if "$" in currency or "USD" in currency:
-            # Copy all deal currency values to USD counterparts for all 3 rows
+            # Copy all deal currency values to USD counterparts for all rows
             usd_mapping = {
                 "Total Fundraising \n(In Deal Currency) ": "Total Fundraising \n($USD)",
                 "SOSV Total \n(In Deal Currency)": "SOSV Total \n($USD)",
@@ -269,7 +282,7 @@ class InvestmentProcessor:
             except:
                 pass # Fallback to whatever Gemini gave us
 
-        return [row_val, row_conf, row_src]
+        return rows
 
     def generate_audit_log(self, original_data, final_data, conflicts):
         """Generates the structured audit log."""
