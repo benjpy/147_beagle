@@ -112,8 +112,6 @@ class InvestmentProcessor:
                     val = ""
                     if isinstance(field_data, dict):
                         val = field_data.get("value")
-                        row_conf[schema_col] = self.calculate_confidence(field_data)
-                        
                         # Split source into Reference and Document
                         sources = field_data.get("sources", [])
                         if not sources and ("source_file" in field_data or "file" in field_data):
@@ -124,30 +122,54 @@ class InvestmentProcessor:
                                 "type": field_data.get("source_type", field_data.get("type", ""))
                             }]
                         
-                        src_refs = []
-                        src_docs = []
-                        if field_data.get("is_conflict"):
-                            src_refs.append("Conflict: Yes")
+                        # --- Conflict Handling ---
+                        is_conflict = field_data.get("is_conflict", False)
+                        base_conf = self.calculate_confidence(field_data)
+                        if is_conflict:
+                            row_conf[schema_col] = f"🔴 {base_conf}"
+                        else:
+                            row_conf[schema_col] = base_conf
+
+                        # --- Reference Formatting ---
+                        # Group details by filename
+                        file_details = {} # filename -> list of details
                         
                         for s in sources:
-                            fname = s.get("file", "")
-                            detail = s.get("detail", "")
-                            if fname: src_docs.append(fname)
-                            if detail:
-                                # Split detail into parts (e.g., "Sheet: X, Cell: Y" -> ["Sheet: X", "Cell: Y"])
-                                # Remove "Sheet: " or "Cell: " prefixes
-                                parts = [p.strip().replace("Sheet: ", "").replace("Cell: ", "") for p in detail.split(",")]
-                                src_refs.extend(parts)
+                            fname = s.get("file", "").strip()
+                            detail = s.get("detail", "").strip()
+                            if fname:
+                                if fname not in file_details:
+                                    file_details[fname] = []
+                                if detail:
+                                    # Specific handling for Page/Article checks if needed, 
+                                    # but generally just cleaning "Sheet:" / "Cell:" prefixes
+                                    clean_detail = detail.replace("Sheet: ", "").replace("Cell: ", "").replace("Cells: ", "")
+                                    
+                                    # Check for Page/Article pattern (simple heuristic)
+                                    # If detail has "Page X" and "Article Y", we might want to join them differently
+                                    # For now, relying on the requested " > " if it looks hierarchical, otherwise just add
+                                    if "Article" in clean_detail and "Page" in clean_detail:
+                                         clean_detail = clean_detail.replace(", Article", " > Article")
+
+                                    file_details[fname].append(clean_detail)
+
+                        formatted_refs = []
+                        if is_conflict:
+                             formatted_refs.append("🔴 Conflict Detected")
+
+                        for fname, details in file_details.items():
+                            if details:
+                                # "Seed-round... > Cells A2:A5 + A8:A9"
+                                joined_details = " + ".join(details)
+                                formatted_refs.append(f"{fname} > {joined_details}")
+                            else:
+                                formatted_refs.append(fname)
                         
-                        row_ref[schema_col] = "\n".join(src_refs)
+                        row_ref[schema_col] = "\n".join(formatted_refs)
+
+                        # --- Document Formatting ---
                         # Deduplicate filenames but preserve order
-                        seen = set()
-                        unique_docs = []
-                        for d in src_docs:
-                            if d not in seen:
-                                unique_docs.append(d)
-                                seen.add(d)
-                        row_doc[schema_col] = "\n".join(unique_docs)
+                        row_doc[schema_col] = "\n".join(file_details.keys())
                     else:
                         val = field_data
                     
