@@ -170,27 +170,36 @@ if 'extracted_df' in st.session_state:
 
     st.subheader("Review & Edit Extracted Data")
     
-    # Track the original state to detect changes
-    edited_df = st.data_editor(st.session_state['extracted_df'], num_rows="dynamic", key="data_editor")
+    # Transpose for display: Fields as rows, (Value, Confidence, Source) as columns
+    display_df = st.session_state['extracted_df'].T
+    display_df.columns = ["Value", "Confidence", "Source"]
     
-    # Check for changes and update audit log
-    if not edited_df.equals(st.session_state['extracted_df']):
-        # Simple change detection
+    # Track the original state to detect changes
+    edited_display_df = st.data_editor(display_df, width="stretch", key="data_editor")
+    
+    # Check for changes and update session state (mapping back to horizontal)
+    if not edited_display_df.equals(display_df):
+        # Transpose back to horizontal format
+        new_extracted_df = edited_display_df.T
+        new_extracted_df.columns = st.session_state['extracted_df'].columns
+        
+        # Simple change detection for audit log
         changes = []
-        for col in edited_df.columns:
-            if not edited_df[col].equals(st.session_state['extracted_df'][col]):
+        for col in st.session_state['extracted_df'].columns:
+            if not new_extracted_df[col].equals(st.session_state['extracted_df'][col]):
                 changes.append(col)
         
         if changes:
             st.session_state['audit_log']['manual_edits'] = st.session_state['audit_log'].get('manual_edits', []) + changes
-            # Note: In a production app, we'd store the old vs new value here.
             # Update the stored DF to the edited one
-            st.session_state['extracted_df'] = edited_df
+            st.session_state['extracted_df'] = new_extracted_df
+            st.rerun()
 
     # Export buttons
     col1, col2 = st.columns(2)
     with col1:
-        csv_data = edited_df.to_csv(index=False)
+        # Export uses the canonical horizontal format
+        csv_data = st.session_state['extracted_df'].to_csv(index=False)
         st.download_button("📥 Download CSV", csv_data, "extracted_data.csv", "text/csv")
     with col2:
         audit_json = json.dumps(st.session_state.get('audit_log', {}), indent=2)
