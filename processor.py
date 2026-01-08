@@ -154,16 +154,23 @@ class InvestmentProcessor:
                                     file_details[fname].append(clean_detail)
 
                         formatted_refs = []
-                        if is_conflict:
-                             formatted_refs.append("🔴 Conflict Detected")
+                        # NOTE: removed standalone "Conflict Detected" append to keep alignment with row_doc
 
                         for fname, details in file_details.items():
-                            if details:
-                                # "Seed-round... > Cells A2:A5 + A8:A9"
-                                joined_details = " + ".join(details)
-                                formatted_refs.append(f"{fname} > {joined_details}")
+                            joined_details = " + ".join(details)
+                            
+                            if is_conflict:
+                                # Conflict: Show everything including filename
+                                ref_str = f"🔴 Conflict Detected > {fname}"
+                                if joined_details:
+                                    ref_str += f" > {joined_details}"
+                                formatted_refs.append(ref_str)
                             else:
-                                formatted_refs.append(fname)
+                                # No Conflict: Hide filename, show only details
+                                if joined_details:
+                                    formatted_refs.append(joined_details)
+                                else:
+                                    formatted_refs.append("Generic") # Placeholder for empty details to maintain alignment
                         
                         row_ref[schema_col] = "\n".join(formatted_refs)
 
