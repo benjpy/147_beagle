@@ -180,7 +180,7 @@ class InvestmentProcessor:
                             row[schema_col] = match
                         # Optional: Add fuzzy matching here if needed
 
-        return [row_val, row_conf, row_src]
+        return [row_val, row_conf, row_ref, row_doc]
 
     def _map_category_to_schema_name(self, cat):
         """Maps internal category name to specific CSV header."""
