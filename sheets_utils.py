@@ -54,18 +54,24 @@ def send_to_google_sheets(df, credentials_info, spreadsheet_id):
         
         # Get all existing data to find the true last row with content.
         existing_values = target_sheet.get_all_values()
-        num_existing_rows = len(existing_values)
         
-        # Ensure we start at least at row 3 (Rows 1-2 reserved for headers/title)
-        start_row = max(num_existing_rows + 1, 3)
+        # Find the index of the last row that is NOT empty/all whitespace
+        last_non_empty_index = -1
+        for i, row in enumerate(existing_values):
+            if any(str(cell).strip() for cell in row):
+                last_non_empty_index = i
+        
+        # last_non_empty_index is 0-based.
+        # If no data found (-1), start at Row 3.
+        # If headers at 0, 1 -> last_index = 1 -> next_row = 1 + 2 = 3.
+        
+        # Calculate next row number (1-based)
+        next_row = last_non_empty_index + 2
+        
+        # Enforce minimum Row 3 start
+        start_row = max(next_row, 3)
         
         # 6. Append data using range update
-        # Using 'update' allows us to specify the exact starting cell, e.g., "A3" or "A10"
-        # gspread v6+ uses update(values=..., range_name=...)
-        # Older versions might use update(range_name, values). 
-        # Providing positional args often works best for compatibility if version is ambiguous,
-        # but named args are cleaner. We'll try the standard update range notation.
-        
         range_start = f"A{start_row}"
         
         # Note: 'update' overwrites cells in the target range. 
