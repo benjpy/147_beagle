@@ -53,8 +53,15 @@ def send_to_google_sheets(df, credentials_info, spreadsheet_id):
         # due to empty formatted rows or user selection.
         
         # 5. Determine insertion point
-        # User constraint: "Start at row 5 rather than row 3. Always start at row 5 even if there is existing data."
         start_row = 5
+        
+        # Check if we need to add rows to accommodate the new data
+        required_rows = start_row + len(data_to_append)
+        current_row_count = target_sheet.row_count
+        
+        if required_rows > current_row_count:
+            # Add difference to accommodate
+            target_sheet.add_rows(required_rows - current_row_count)
         
         # 6. Write data using range update
         range_start = f"A{start_row}"
