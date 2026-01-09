@@ -2,14 +2,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 
-def send_to_google_sheets(df, credentials_path, spreadsheet_id):
+def send_to_google_sheets(df, credentials_info, spreadsheet_id):
     """
     Appends the provided DataFrame to the Google Sheet tab located immediately 
     after the 'Index' tab.
     
     Args:
         df (pd.DataFrame): The data to export.
-        credentials_path (str): Path to the service account JSON.
+        credentials_info (str or dict): Path to service account JSON or the dict itself.
         spreadsheet_id (str): The ID of the target Google Spreadsheet.
         
     Returns:
@@ -21,7 +21,12 @@ def send_to_google_sheets(df, credentials_path, spreadsheet_id):
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = Credentials.from_service_account_file(credentials_path, scopes=scopes)
+        
+        if isinstance(credentials_info, dict):
+            creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        else:
+            creds = Credentials.from_service_account_file(credentials_info, scopes=scopes)
+            
         # Authorize gspread
         client = gspread.authorize(creds)
 

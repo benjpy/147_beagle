@@ -242,15 +242,35 @@ if 'extracted_df' in st.session_state:
     if sheet_id:
         if st.button("📤 Send to Google Sheets"):
             with st.spinner("Sending data to Google Sheets..."):
-                # Use the current extracted_df
-                # Ensure credentials exist
-                creds_path = "credentials.json"
-                if not os.path.exists(creds_path):
-                    st.error("❌ credentials.json not found.")
+                # Determine credentials source: Secrets > JSON File
+                creds_info = None
+                
+                # Check Secrets first
+                if "GOOGLE_SHEETS_CREDENTIALS" in st.secrets:
+                    try:
+                        # If stored as a TOML string/JSON string, parse it. 
+                        # If stored as a proper TOML table, Streamlit returns a dict/AttrDict.
+                        secret_val = st.secrets["GOOGLE_SHEETS_CREDENTIALS"]
+                        if isinstance(secret_val, str):
+                            creds_info = json.loads(secret_val)
+                        else:
+                            # Convert AttrDict to dict if necessary, though nice to have
+                            creds_info = dict(secret_val)
+                    except Exception as e:
+                        st.error(f"❌ Error parsing `GOOGLE_SHEETS_CREDENTIALS` from secrets: {e}")
+                
+                # Fallback to local file
+                if not creds_info:
+                    creds_path = "credentials.json"
+                    if os.path.exists(creds_path):
+                        creds_info = creds_path
+                
+                if not creds_info:
+                    st.error("❌ Google Sheets credentials not found. Set `GOOGLE_SHEETS_CREDENTIALS` in secrets or provide `credentials.json` locally.")
                 else:
                     result = sheets_utils.send_to_google_sheets(
                         st.session_state['extracted_df'], 
-                        creds_path, 
+                        creds_info, 
                         sheet_id
                     )
                     
