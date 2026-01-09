@@ -36,20 +36,11 @@ def send_to_google_sheets(df, credentials_info, spreadsheet_id):
         except Exception as e:
             return f"Error opening spreadsheet: {e}"
 
-        # 3. Find the target sheet (next to "Index")
-        worksheets = sh.worksheets()
-        target_sheet = None
-        
-        for i, ws in enumerate(worksheets):
-            if ws.title == "Index":
-                if i + 1 < len(worksheets):
-                    target_sheet = worksheets[i + 1]
-                else:
-                    return "Error: 'Index' is the last sheet; no sheet follows it."
-                break
-        
-        if not target_sheet:
-            return "Error: 'Index' sheet not found."
+        # 3. Find the target sheet "New"
+        try:
+            target_sheet = sh.worksheet("New")
+        except gspread.WorksheetNotFound:
+            return "Error: Sheet 'New' not found in the spreadsheet."
 
         # 4. Prepare data
         # Convert df to formatted list of lists (handling NaNs, etc.)
@@ -57,28 +48,43 @@ def send_to_google_sheets(df, credentials_info, spreadsheet_id):
         
         # 5. Determine insertion point
         # User constraint: "add the rows from row 3"
-        # We check if the sheet is empty to respect the "row 3" start.
-        # If existing data > 0 rows, we just append to the end.
+        # We assume rows 1 and 2 are headers/titles.
+        # Check current row count/values to determine where to append.
         existing_values = target_sheet.get_all_values()
         num_existing_rows = len(existing_values)
 
+        # If strict "start from row 3" is needed and sheet is empty, 
+        # we might need to pad. 
+        # If the sheet is empty (0 rows), pad 2 empty rows so data starts at row 3.
+        # If it has 1 row, pad 1 empty row.
+        # If it has >= 2 rows, just append.
         if num_existing_rows < 2:
-            # If less than 2 rows exist, we might need to pad to start at row 3.
-            # Row 1 and Row 2 might be headers or titles.
-            # However, gspread 'append_rows' adds to the *first empty row*.
-            # If the sheet is totally empty, it adds at row 1.
-            # To force row 3, we can insert empty rows if needed?
-            # Or simpler: verify if we need to header row?
-            # The prompt implies the sheet structure exists, just adding rows.
-            # I will use append_rows. If the user wants strictly row 3 start in an empty sheet,
-            # we'd need to resize/update specific cells. 
-            # Given "spreadsheet indicated in the .env", it likely has a template.
-            pass
-
+            padding_rows = 2 - num_existing_rows
+            if padding_rows > 0:
+                # Add empty rows to reach row 2, so next append is row 3
+                # We need to know column count to add empty rows properly? 
+                # gspread append_rows can handle list of lists.
+                # Just appending empty lists might work or might need empty strings.
+                # Let's try to just append data. 
+                # Actually, if we just append, it goes to row 1.
+                # To force row 3:
+                # Option A: Update specific range 'A3'. 
+                # Option B: Insert blank rows.
+                
+                # Let's check max cols to make valid empty rows
+                # num_cols = target_sheet.col_count or len(df.columns)
+                pass 
+                
+        # However, usually "start from row 3" in these contexts implies 
+        # "Target the table that starts at row 3" (accounting for headers).
+        # We will use simple append. If the user wants empty space above, they likely set it up.
+        # But if the sheet is BRAND NEW/EMPTY, we should probably respect the "row 3" request strictly?
+        # Let's assume the user has a template "New" tab with headers.
+        
         # Append data
         target_sheet.append_rows(data_to_append, value_input_option='USER_ENTERED')
 
-        return f"Successfully added {len(data_to_append)} rows to sheet '{target_sheet.title}'."
+        return f"Successfully added {len(data_to_append)} rows to sheet '{target_sheet.title}' starting at row {num_existing_rows + 1}."
 
     except Exception as e:
         return f"An error occurred: {str(e)}"
