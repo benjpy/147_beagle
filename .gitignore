@@ -38,3 +38,6 @@ audit_log.json
 *.xlsx
 *.csv
 !Alex New Company Form - Closed.csv
+
+# Secrets
+credentials.json

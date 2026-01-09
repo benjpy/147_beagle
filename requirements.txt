@@ -5,3 +5,5 @@ python-dotenv
 PyPDF2
 openpyxl
 pdfplumber
+gspread
+google-auth

@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import time
 import extractor
 import processor as processor_module
+import sheets_utils
 
 # Load environment variables
 load_dotenv()
@@ -178,9 +179,9 @@ if 'extracted_df' in st.session_state:
     
     # Configure column widths for better readability and space utilization
     column_config = {
-        "Field": st.column_config.TextColumn("Field", width="medium"),
-        "Value": st.column_config.TextColumn("Value", width="small"),
-        "Confidence": st.column_config.TextColumn("Confidence", width="small"),
+        "Field": st.column_config.TextColumn("Field", width="small"),
+        "Value": st.column_config.TextColumn("Value", width=120),
+        "Confidence": st.column_config.TextColumn("Confidence", width=100),
         "Reference": st.column_config.TextColumn("Reference", width="medium"),
         "Document": st.column_config.TextColumn("Document", width="medium")
     }
@@ -222,3 +223,41 @@ if 'extracted_df' in st.session_state:
     with col2:
         audit_json = json.dumps(st.session_state.get('audit_log', {}), indent=2)
         st.download_button("📋 Download Audit Log", audit_json, "audit_log.json", "application/json")
+    
+    # Google Sheets Integration
+    st.divider()
+    sheet_id = os.getenv("GOOGLE_SHEET_ID")
+    sheet_url = os.getenv("GOOGLE_SHEET_URL")
+    
+    # Try to extract ID from URL if ID is missing but URL is present
+    if not sheet_id and sheet_url:
+        try:
+             # Standard format: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit...
+             if "/d/" in sheet_url:
+                 sheet_id = sheet_url.split("/d/")[1].split("/")[0]
+        except Exception:
+             # Fallback or invalid URL format; sheet_id remains None
+             pass
+    
+    if sheet_id:
+        if st.button("📤 Send to Google Sheets"):
+            with st.spinner("Sending data to Google Sheets..."):
+                # Use the current extracted_df
+                # Ensure credentials exist
+                creds_path = "credentials.json"
+                if not os.path.exists(creds_path):
+                    st.error("❌ credentials.json not found.")
+                else:
+                    result = sheets_utils.send_to_google_sheets(
+                        st.session_state['extracted_df'], 
+                        creds_path, 
+                        sheet_id
+                    )
+                    
+                    if "Successfully" in result:
+                        st.success(result)
+                    else:
+                        st.error(result)
+    else:
+        st.warning("⚠️ `GOOGLE_SHEET_ID` or `GOOGLE_SHEET_URL` not found in `.env`. Cannot export to Google Sheets.")
+
