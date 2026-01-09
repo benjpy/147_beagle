@@ -52,26 +52,11 @@ def send_to_google_sheets(df, credentials_info, spreadsheet_id):
         # This avoids issues where 'append_rows' might skip to the end of the sheet 
         # due to empty formatted rows or user selection.
         
-        # Get all existing data to find the true last row with content.
-        existing_values = target_sheet.get_all_values()
+        # 5. Determine insertion point
+        # User constraint: "Start at row 5 rather than row 3. Always start at row 5 even if there is existing data."
+        start_row = 5
         
-        # Find the index of the last row that is NOT empty/all whitespace
-        last_non_empty_index = -1
-        for i, row in enumerate(existing_values):
-            if any(str(cell).strip() for cell in row):
-                last_non_empty_index = i
-        
-        # last_non_empty_index is 0-based.
-        # If no data found (-1), start at Row 3.
-        # If headers at 0, 1 -> last_index = 1 -> next_row = 1 + 2 = 3.
-        
-        # Calculate next row number (1-based)
-        next_row = last_non_empty_index + 2
-        
-        # Enforce minimum Row 3 start
-        start_row = max(next_row, 3)
-        
-        # 6. Append data using range update
+        # 6. Write data using range update
         range_start = f"A{start_row}"
         
         # Note: 'update' overwrites cells in the target range. 
