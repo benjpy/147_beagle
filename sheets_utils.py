@@ -48,43 +48,36 @@ def send_to_google_sheets(df, credentials_info, spreadsheet_id):
         
         # 5. Determine insertion point
         # User constraint: "add the rows from row 3"
-        # We assume rows 1 and 2 are headers/titles.
-        # Check current row count/values to determine where to append.
+        # We calculate the next available row based on ACTUAL content in the sheet.
+        # This avoids issues where 'append_rows' might skip to the end of the sheet 
+        # due to empty formatted rows or user selection.
+        
+        # Get all existing data to find the true last row with content.
         existing_values = target_sheet.get_all_values()
         num_existing_rows = len(existing_values)
-
-        # If strict "start from row 3" is needed and sheet is empty, 
-        # we might need to pad. 
-        # If the sheet is empty (0 rows), pad 2 empty rows so data starts at row 3.
-        # If it has 1 row, pad 1 empty row.
-        # If it has >= 2 rows, just append.
-        if num_existing_rows < 2:
-            padding_rows = 2 - num_existing_rows
-            if padding_rows > 0:
-                # Add empty rows to reach row 2, so next append is row 3
-                # We need to know column count to add empty rows properly? 
-                # gspread append_rows can handle list of lists.
-                # Just appending empty lists might work or might need empty strings.
-                # Let's try to just append data. 
-                # Actually, if we just append, it goes to row 1.
-                # To force row 3:
-                # Option A: Update specific range 'A3'. 
-                # Option B: Insert blank rows.
-                
-                # Let's check max cols to make valid empty rows
-                # num_cols = target_sheet.col_count or len(df.columns)
-                pass 
-                
-        # However, usually "start from row 3" in these contexts implies 
-        # "Target the table that starts at row 3" (accounting for headers).
-        # We will use simple append. If the user wants empty space above, they likely set it up.
-        # But if the sheet is BRAND NEW/EMPTY, we should probably respect the "row 3" request strictly?
-        # Let's assume the user has a template "New" tab with headers.
         
-        # Append data
-        target_sheet.append_rows(data_to_append, value_input_option='USER_ENTERED')
+        # Ensure we start at least at row 3 (Rows 1-2 reserved for headers/title)
+        start_row = max(num_existing_rows + 1, 3)
+        
+        # 6. Append data using range update
+        # Using 'update' allows us to specify the exact starting cell, e.g., "A3" or "A10"
+        # gspread v6+ uses update(values=..., range_name=...)
+        # Older versions might use update(range_name, values). 
+        # Providing positional args often works best for compatibility if version is ambiguous,
+        # but named args are cleaner. We'll try the standard update range notation.
+        
+        range_start = f"A{start_row}"
+        
+        # Note: 'update' overwrites cells in the target range. 
+        # Since we calculated start_row based on existing data, this acts as an append
+        # that ignores "ghost" empty rows.
+        target_sheet.update(
+            range_name=range_start, 
+            values=data_to_append, 
+            value_input_option='USER_ENTERED'
+        )
 
-        return f"Successfully added {len(data_to_append)} rows to sheet '{target_sheet.title}' starting at row {num_existing_rows + 1}."
+        return f"Successfully added {len(data_to_append)} rows to sheet '{target_sheet.title}' starting at row {start_row}."
 
     except Exception as e:
         return f"An error occurred: {str(e)}"
